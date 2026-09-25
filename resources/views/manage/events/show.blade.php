@@ -254,7 +254,13 @@
                     <div class="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 border border-slate-100">
                         <div>
                             <p class="text-sm font-semibold text-slate-900">{{ $tt->name }}</p>
-                            <p class="text-xs text-slate-500">${{ number_format($tt->price, 2) }} · {{ $tt->sold_count }}/{{ $tt->quantity }} sold</p>
+                            <p class="text-xs text-slate-500">
+                                {{ number_format($tt->payablePrice(), 2) }} {{ $tt->checkoutCurrency() }}
+                                @if($tt->usdReferencePrice() !== null)
+                                    · {{ number_format($tt->usdReferencePrice(), 2) }} USD reference
+                                @endif
+                                · {{ $tt->sold_count }}/{{ $tt->quantity }} sold
+                            </p>
                         </div>
                         <span class="text-xs font-semibold {{ ($tt->quantity - $tt->sold_count) <= 0 ? 'text-red-500' : 'text-emerald-600' }}">
                             {{ $tt->quantity - $tt->sold_count }} left

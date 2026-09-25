@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class EventManagementController extends Controller
 {
@@ -186,7 +187,7 @@ class EventManagementController extends Controller
 
     public function edit(string $slug)
     {
-        $event = Event::with('speakers', 'sponsors', 'topics', 'ticketTypes')->where('slug', $slug)->firstOrFail();
+        $event = Event::with(['speakers', 'sponsors', 'topics', 'ticketTypes' => fn ($query) => $query->where('is_active', true)])->where('slug', $slug)->firstOrFail();
         $venues = Venue::orderBy('name', 'asc')->get();
         $eventTypes = EventType::orderBy('name', 'asc')->get();
         $speakers = Speaker::orderBy('name', 'asc')->get();
@@ -211,9 +212,17 @@ class EventManagementController extends Controller
             'status' => 'required|in:draft,published,archived',
             'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'cover_image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'pricing' => 'nullable|array',
+            'pricing.*.name' => 'required|string|max:255',
+            'pricing.*.price' => 'required|numeric|min:0',
+            'pricing.*.price_eur' => 'required|numeric|min:0',
+            'pricing.*.discount_price' => 'nullable|numeric|min:0',
+            'pricing.*.discount_price_eur' => 'nullable|numeric|min:0',
+            'pricing.*.quantity' => 'required|integer|min:1',
         ]);
 
         $data['slug'] = Str::slug($data['name']) . '-' . Str::random(4);
+        unset($data['pricing']);
         $data['timezone'] = $data['timezone'] ?? 'UTC';
         $data['created_by'] = $request->user()->id;
 
@@ -274,7 +283,9 @@ class EventManagementController extends Controller
                     $event->ticketTypes()->create([
                         'name' => $pkg['name'],
                         'price' => $pkg['price'] ?? 0,
+                        'price_eur' => $pkg['price_eur'],
                         'discount_price' => !empty($pkg['discount_price']) ? $pkg['discount_price'] : null,
+                        'discount_price_eur' => !empty($pkg['discount_price_eur']) ? $pkg['discount_price_eur'] : null,
                         'description' => $pkg['description'] ?? '',
                         'highlights' => !empty($pkg['highlights']) ? array_map('trim', explode(',', $pkg['highlights'])) : null,
                         'quantity' => $pkg['quantity'] ?? 100,
@@ -321,9 +332,35 @@ class EventManagementController extends Controller
             'logo' =>  'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'cover_image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
             'remove_cover_image' => 'nullable|in:0,1,true,false,on,off,yes,no',
+            'pricing' => 'nullable|array',
+            'pricing.*.id' => ['nullable', 'integer', Rule::exists('ticket_types', 'id')->where('event_id', $event->id)],
+            'pricing.*.name' => 'required|string|max:255',
+            'pricing.*.price' => 'required|numeric|min:0',
+            'pricing.*.price_eur' => 'nullable|numeric|min:0',
+            'pricing.*.discount_price' => 'nullable|numeric|min:0',
+            'pricing.*.discount_price_eur' => 'nullable|numeric|min:0',
+            'pricing.*.quantity' => 'required|integer|min:1',
         ]);
 
         $data['timezone'] = $data['timezone'] ?? 'UTC';
+        unset($data['pricing']);
+
+        $paidCurrencies = [];
+        foreach ($request->input('pricing', []) as $pkg) {
+            if (empty($pkg['id']) && !isset($pkg['price_eur'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'pricing' => 'New ticket packages require an exact EUR fee.',
+                ]);
+            }
+            if (($pkg['price'] ?? 0) > 0 || ($pkg['price_eur'] ?? 0) > 0) {
+                $paidCurrencies[] = isset($pkg['price_eur']) ? 'EUR' : 'USD';
+            }
+        }
+        if (count(array_unique($paidCurrencies)) > 1) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'pricing' => 'Enter exact EUR fees for all paid packages before enabling EUR checkout for this event.',
+            ]);
+        }
 
         if ($data['status'] === 'published' && !$event->published_at) {
             $data['published_at'] = now();
@@ -392,22 +429,32 @@ class EventManagementController extends Controller
         }
 
         if ($request->has('pricing')) {
-            $event->ticketTypes()->delete();
+            $retainedIds = [];
             foreach ($request->pricing as $pkg) {
                 if (!empty($pkg['name'])) {
-                    $event->ticketTypes()->create([
+                    $attributes = [
                         'name' => $pkg['name'],
                         'price' => $pkg['price'] ?? 0,
+                        'price_eur' => $pkg['price_eur'] ?? null,
                         'discount_price' => !empty($pkg['discount_price']) ? $pkg['discount_price'] : null,
+                        'discount_price_eur' => !empty($pkg['discount_price_eur']) ? $pkg['discount_price_eur'] : null,
                         'description' => $pkg['description'] ?? '',
                         'highlights' => !empty($pkg['highlights']) ? array_map('trim', explode(',', $pkg['highlights'])) : null,
                         'quantity' => $pkg['quantity'] ?? 100,
                         'currency' => 'USD',
                         'is_active' => true,
                         'is_paid' => true,
-                    ]);
+                    ];
+                    if (!empty($pkg['id'])) {
+                        $ticketType = $event->ticketTypes()->findOrFail($pkg['id']);
+                        $ticketType->update($attributes);
+                    } else {
+                        $ticketType = $event->ticketTypes()->create($attributes);
+                    }
+                    $retainedIds[] = $ticketType->id;
                 }
             }
+            $event->ticketTypes()->whereNotIn('id', $retainedIds)->update(['is_active' => false]);
         }
 
         ActivityLog::create([

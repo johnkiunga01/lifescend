@@ -120,8 +120,8 @@ class CouponController extends Controller
 
         $orderAmount = 0;
         foreach ($data['tickets'] as $entry) {
-            $tt = \App\Models\TicketType::findOrFail($entry['ticket_type_id']);
-            $orderAmount += $tt->price * (int) $entry['quantity'];
+            $tt = \App\Models\TicketType::where('event_id', $data['event_id'])->where('is_active', true)->findOrFail($entry['ticket_type_id']);
+            $orderAmount += $tt->payablePrice() * (int) $entry['quantity'];
         }
 
         $discount = $coupon->calculateDiscount($orderAmount);

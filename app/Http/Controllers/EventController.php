@@ -26,7 +26,7 @@ class EventController extends Controller
 {
     public function show(string $slug)
     {
-        $event = Event::with(['venue', 'speakers', 'topics', 'sessions', 'sessions.speakers', 'sessions.track', 'sessions.sessionType', 'sponsors', 'ticketTypes'])
+        $event = Event::with(['venue', 'speakers', 'topics', 'sessions', 'sessions.speakers', 'sessions.track', 'sessions.sessionType', 'sponsors', 'ticketTypes' => fn ($query) => $query->where('is_active', true)])
             ->where('slug', $slug)
             ->firstOrFail();
 
@@ -61,7 +61,7 @@ class EventController extends Controller
         foreach ($request->tickets as $entry) {
             $tt = $ticketTypes[$entry['ticket_type_id']];
             $qty = (int) $entry['quantity'];
-            if (!isset($firstType)) { $firstType = $tt; $currency = $tt->currency; }
+            if ($tt->payablePrice() > 0) { $currency = $tt->checkoutCurrency(); }
 
             $remaining = $tt->quantity - $tt->sold_count;
             if ($qty > $remaining) {
@@ -72,7 +72,7 @@ class EventController extends Controller
                 return back()->withErrors(['quantity' => "Maximum {$tt->max_per_user} '{$tt->name}' tickets per customer."]);
             }
 
-            $totalAmount += $tt->price * $qty;
+            $totalAmount += $tt->payablePrice() * $qty;
         }
 
         $reservation = $this->validateReservation(
@@ -142,13 +142,13 @@ class EventController extends Controller
                         throw new \Exception("Only {$remaining} '{$tt->name}' tickets remaining. Your order required {$qty}.");
                     }
 
-                    $lineTotal = $tt->price * $qty;
+                    $lineTotal = $tt->payablePrice() * $qty;
 
                     OrderItem::create([
                         'order_id' => $order->id,
                         'ticket_type_id' => $tt->id,
                         'quantity' => $qty,
-                        'unit_price' => $tt->price,
+                        'unit_price' => $tt->payablePrice(),
                         'total_price' => $lineTotal,
                     ]);
 
@@ -258,7 +258,7 @@ class EventController extends Controller
         foreach ($request->tickets as $entry) {
             $tt = $ticketTypes[$entry['ticket_type_id']];
             $qty = (int) $entry['quantity'];
-            if (!isset($firstType)) { $firstType = $tt; $currency = $tt->currency; }
+            if ($tt->payablePrice() > 0) { $currency = $tt->checkoutCurrency(); }
 
             $remaining = $tt->quantity - $tt->sold_count;
             if ($qty > $remaining) {
@@ -269,7 +269,7 @@ class EventController extends Controller
                 return back()->withErrors(['quantity' => "Maximum {$tt->max_per_user} '{$tt->name}' tickets per customer."]);
             }
 
-            $totalAmount += $tt->price * $qty;
+            $totalAmount += $tt->payablePrice() * $qty;
         }
 
         $reservation = $this->validateReservation(
@@ -337,8 +337,8 @@ class EventController extends Controller
                     'order_id' => $order->id,
                     'ticket_type_id' => $tt->id,
                     'quantity' => $qty,
-                    'unit_price' => $tt->price,
-                    'total_price' => $tt->price * $qty,
+                    'unit_price' => $tt->payablePrice(),
+                    'total_price' => $tt->payablePrice() * $qty,
                 ]);
             }
 
@@ -394,10 +394,14 @@ class EventController extends Controller
 
             $ticketType = $query->first();
 
-            if (!$ticketType) {
+            if (!$ticketType || !$ticketType->is_active) {
                 throw ValidationException::withMessages([
-                    'tickets' => 'One or more selected ticket types do not belong to this event.',
+                    'tickets' => 'One or more selected ticket types are unavailable for this event.',
                 ]);
+            }
+
+            if ($ticketTypes && $ticketType->payablePrice() > 0 && collect($ticketTypes)->contains(fn ($type) => $type->payablePrice() > 0 && $type->checkoutCurrency() !== $ticketType->checkoutCurrency())) {
+                throw ValidationException::withMessages(['tickets' => 'Tickets with different payment currencies cannot be combined.']);
             }
 
             $existingTickets = Ticket::query()

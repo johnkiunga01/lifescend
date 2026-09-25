@@ -43,12 +43,10 @@
                     @endif
                 </div>
                 <div class="text-right shrink-0">
-                    @if($ticketType->price > 0)
-                        @if($ticketType->discount_price)
-                        <p class="text-lg font-extrabold text-slate-900">{{ number_format($ticketType->discount_price, 2) }} <span class="text-xs font-semibold text-slate-400">{{ $ticketType->currency }}</span></p>
-                        <p class="text-xs text-slate-400 line-through">{{ number_format($ticketType->price, 2) }}</p>
-                        @else
-                        <p class="text-lg font-extrabold text-slate-900">{{ number_format($ticketType->price, 2) }} <span class="text-xs font-semibold text-slate-400">{{ $ticketType->currency }}</span></p>
+                    @if($ticketType->payablePrice() > 0)
+                        <p class="text-lg font-extrabold text-slate-900">{{ number_format($ticketType->payablePrice(), 2) }} <span class="text-xs font-semibold text-slate-400">{{ $ticketType->checkoutCurrency() }}</span></p>
+                        @if($ticketType->usdReferencePrice() !== null)
+                        <p class="text-xs text-slate-500">{{ number_format($ticketType->usdReferencePrice(), 2) }} USD reference</p>
                         @endif
                     @else
                         <p class="text-lg font-extrabold text-emerald-600">Free</p>

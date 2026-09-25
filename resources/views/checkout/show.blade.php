@@ -18,12 +18,6 @@
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 Back to Event
             </a>
-            @if($intent === 'reserve')
-            <div class="mt-4 flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
-                <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <span>You chose <strong>Reserve &amp; Pay Later</strong>. Select your tickets, then at the payment step <strong>Reserve (Pay Later)</strong> is preselected — you can still switch to <strong>Pay Now</strong>.</span>
-            </div>
-            @endif
         </div>
 
         <div class="grid gap-8 lg:grid-cols-[1fr_400px] lg:items-start">
@@ -55,31 +49,6 @@
                     <h2 class="text-xl font-extrabold text-slate-900 mb-1">Select Your Tickets</h2>
                     <p class="text-sm text-slate-500 mb-6">{{ $event->name }}</p>
 
-                    @php $hasPaidTickets = $event->ticketTypes->contains(fn ($tt) => $tt->price > 0); @endphp
-                    @if($hasPaidTickets)
-                    {{-- Payment mode: Pay Now vs Reserve --}}
-                    <div class="mb-6">
-                        <p class="text-sm font-semibold text-slate-800 mb-2">How would you like to proceed?</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label :class="paymentMode === 'pay' ? 'border-gold-500 bg-gold-50 ring-1 ring-gold-500' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                   class="flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-all">
-                                <input type="radio" name="payment_mode" value="pay" x-model="paymentMode" class="mt-0.5 h-4 w-4 border-slate-300 text-gold-500 focus:ring-gold-500">
-                                <span>
-                                    <span class="block text-sm font-bold text-slate-900">Pay Now</span>
-                                    <span class="block text-xs text-slate-500 mt-0.5">Pay securely by card and get your tickets instantly.</span>
-                                </span>
-                            </label>
-                            <label :class="paymentMode === 'reserve' ? 'border-gold-500 bg-gold-50 ring-1 ring-gold-500' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                   class="flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-all">
-                                <input type="radio" name="payment_mode" value="reserve" x-model="paymentMode" class="mt-0.5 h-4 w-4 border-slate-300 text-gold-500 focus:ring-gold-500">
-                                <span>
-                                    <span class="block text-sm font-bold text-slate-900">Reserve (Pay Later)</span>
-                                    <span class="block text-xs text-slate-500 mt-0.5">Hold your place. We'll contact you to arrange payment (e.g. cheque).</span>
-                                </span>
-                            </label>
-                        </div>
-                    </div>
-                    @endif
 
                     <div class="space-y-4">
                         @foreach($event->ticketTypes as $ticketType)
@@ -120,8 +89,11 @@
                                 </div>
 
                                 <div class="text-right shrink-0">
-                                    @if($ticketType->price > 0)
-                                    <p class="text-2xl font-extrabold text-slate-900">{{ number_format($ticketType->price, 2) }} <span class="text-sm font-semibold text-slate-400">{{ $ticketType->currency }}</span></p>
+                                    @if($ticketType->payablePrice() > 0)
+                                    <p class="text-2xl font-extrabold text-slate-900">{{ number_format($ticketType->payablePrice(), 2) }} <span class="text-sm font-semibold text-slate-400">{{ $ticketType->checkoutCurrency() }}</span></p>
+                                    @if($ticketType->usdReferencePrice() !== null)
+                                    <p class="text-xs text-slate-500">{{ number_format($ticketType->usdReferencePrice(), 2) }} USD reference</p>
+                                    @endif
                                     @else
                                     <p class="text-2xl font-extrabold text-emerald-600">Free</p>
                                     @endif
@@ -394,8 +366,8 @@
                                     <div class="flex-1 min-w-0">
                                         <p class="text-sm font-bold text-slate-800 leading-tight">{{ $tt->name }}</p>
                                         <p class="text-xs text-slate-500 mt-0.5">
-                                            @if($tt->price > 0)
-                                                {{ number_format($tt->price, 2) }} {{ $tt->currency }}
+                                            @if($tt->payablePrice() > 0)
+                                                {{ number_format($tt->payablePrice(), 2) }} {{ $tt->checkoutCurrency() }}
                                             @else
                                                 Free
                                             @endif
@@ -702,20 +674,6 @@
                                     </span>
                                 </button>
 
-                                {{-- Paid order: Reserve --}}
-                                <button x-show="totalAfterDiscount > 0 && paymentMode === 'reserve'" type="button" @click="submitReservation()"
-                                :disabled="reserving || submitting || !attendeesValid || totalQuantity < 1"
-                                class="rounded-xl bg-gradient-to-r from-gold-500 to-gold-600 px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-gold-500/25 hover:from-gold-600 hover:to-gold-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <span x-show="!reserving" class="flex items-center gap-2">
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        Reserve &amp; Pay Later
-                                    </span>
-                                    <span x-show="reserving" class="inline-flex items-center gap-2">
-                                        <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                                        Reserving...
-                                    </span>
-                                </button>
-
                                 {{-- Paid order: Pay now --}}
                                 <button x-show="totalAfterDiscount > 0 && paymentMode === 'pay'" type="button" @click="handlePayment()"
                                 :disabled="submitting || !attendeesValid"
@@ -864,10 +822,10 @@
 @push('head')
 @php
     $checkoutData = [
-        'currency' => $event->ticketTypes->first()->currency ?? 'USD',
+        'currency' => $event->ticketTypes->first(fn ($type) => $type->payablePrice() > 0)?->checkoutCurrency() ?? 'USD',
         'ticketTypes' => $event->ticketTypes->mapWithKeys(fn($tt) => [$tt->id => [
             'name' => $tt->name,
-            'price' => (float) $tt->price,
+            'price' => $tt->payablePrice(),
             'max_per_user' => (int) $tt->max_per_user,
             'remaining' => max(0, $tt->quantity - $tt->sold_count),
         ]])->toArray(),
@@ -904,7 +862,7 @@ function checkout() {
         couponMessage: '',
         submitting: false,
         reserving: false,
-        paymentMode: '{{ $intent === 'reserve' ? 'reserve' : 'pay' }}',
+        paymentMode: 'pay',
         paymentError: '',
         stripe: null,
         clientSecret: null,

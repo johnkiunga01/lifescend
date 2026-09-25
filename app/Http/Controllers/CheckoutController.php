@@ -22,8 +22,6 @@ class CheckoutController extends Controller
 
         $stripeKey = config('services.stripe.key');
 
-        $intent = request()->query('intent') === 'reserve' ? 'reserve' : null;
-
-        return view('checkout.show', compact('event', 'stripeKey', 'intent'));
+        return view('checkout.show', compact('event', 'stripeKey'));
     }
 }

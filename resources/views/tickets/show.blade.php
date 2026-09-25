@@ -6,7 +6,7 @@
 @php
     $displayName = $ticket->attendee?->participant_name ?? $ticket->user->name;
     $displayEmail = $ticket->attendee?->participant_email ?? $ticket->user->email;
-    $cur = $ticket->ticketType?->currency ?? 'USD';
+    $cur = $ticket->order?->currency ?? $ticket->ticketType?->currency ?? 'USD';
     $sym = ['USD' => '$', 'KES' => 'KSh', 'EUR' => '€', 'GBP' => '£'][$cur] ?? '$';
     $isCheckedIn = !is_null($ticket->checked_in_at);
 @endphp
@@ -84,7 +84,7 @@
                 <span class="text-slate-500">Price</span>
                 <span class="font-bold text-slate-900">
                     @if((float)$ticket->order->total_amount > 0)
-                        {{ $sym }}{{ number_format((float)$ticket->ticketType?->price ?? 0, 2) }}
+                        {{ $sym }}{{ number_format((float) ($ticket->order->items->firstWhere('ticket_type_id', $ticket->ticket_type_id)?->unit_price ?? 0), 2) }}
                     @else
                         <span class="text-emerald-600">Free</span>
                     @endif

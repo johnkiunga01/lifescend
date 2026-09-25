@@ -47,11 +47,6 @@
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
                         Get Tickets
                     </a>
-                    <a href="{{ route('checkout.show', ['slug' => $event->slug, 'intent' => 'reserve']) }}"
-                        class="inline-flex items-center gap-2 rounded-xl border-2 border-white/30 bg-white/10 px-8 py-4 text-base font-bold text-white backdrop-blur-sm hover:bg-white/20 transition-all duration-200 cursor-pointer">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        Reserve (Pay Later)
-                    </a>
                 </div>
                 @endif
             </div>
@@ -308,7 +303,7 @@
         @if($event->ticketTypes->isNotEmpty())
         @php
             $hasAvailable = $event->ticketTypes->contains(fn($tt) => ($tt->quantity - $tt->sold_count) > 0);
-            $cheapest = $event->ticketTypes->where(fn($tt) => ($tt->quantity - $tt->sold_count) > 0)->sortBy('price')->first();
+            $cheapest = $event->ticketTypes->where(fn($tt) => ($tt->quantity - $tt->sold_count) > 0)->sortBy(fn($tt) => $tt->payablePrice())->first();
             $totalSold = $event->ticketTypes->sum('sold_count');
             $totalCapacity = $event->ticketTypes->sum('quantity');
             $totalRemaining = max(0, $totalCapacity - $totalSold);
@@ -319,8 +314,8 @@
                 <div class="bg-slate-900 px-5 py-4">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-semibold text-white">Get Tickets</h3>
-                        @if($cheapest && $cheapest->price > 0)
-                        <span class="text-xs text-slate-400">Price <span class="text-gold-400 font-bold">{{ number_format($cheapest->discount_price ?: $cheapest->price, 2) }} {{ $cheapest->currency }}</span></span>
+                        @if($cheapest && $cheapest->payablePrice() > 0)
+                        <span class="text-xs text-slate-400">Price <span class="text-gold-400 text-base font-extrabold">{{ number_format($cheapest->payablePrice(), 2) }} {{ $cheapest->checkoutCurrency() }}</span></span>
                         @endif
                     </div>
                 </div>
@@ -342,12 +337,10 @@
                                 @endif
                             </div>
                             <div class="text-right shrink-0 ml-3">
-                                @if($ticketType->price > 0)
-                                    @if($ticketType->discount_price)
-                                    <p class="text-sm font-extrabold text-slate-900">{{ number_format($ticketType->discount_price, 2) }} <span class="text-[10px] font-semibold text-slate-400">{{ $ticketType->currency }}</span></p>
-                                    <p class="text-[10px] text-slate-400 line-through leading-tight">{{ number_format($ticketType->price, 2) }}</p>
-                                    @else
-                                    <p class="text-sm font-extrabold text-slate-900">{{ number_format($ticketType->price, 2) }} <span class="text-[10px] font-semibold text-slate-400">{{ $ticketType->currency }}</span></p>
+                                @if($ticketType->payablePrice() > 0)
+                                    <p class="text-lg font-extrabold text-slate-900">{{ number_format($ticketType->payablePrice(), 2) }} <span class="text-xs font-semibold text-slate-500">{{ $ticketType->checkoutCurrency() }}</span></p>
+                                    @if($ticketType->usdReferencePrice() !== null)
+                                    <p class="text-xs text-slate-500">{{ number_format($ticketType->usdReferencePrice(), 2) }} USD reference</p>
                                     @endif
                                 @else
                                     <p class="text-sm font-extrabold text-emerald-600">Free</p>
@@ -387,11 +380,6 @@
                             class="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-gold-500 to-gold-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-gold-500/25 hover:from-gold-600 hover:to-gold-700 hover:shadow-xl transition-all duration-200 w-full hover:scale-[1.02]">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
                             Buy Tickets
-                        </a>
-                        <a href="{{ route('checkout.show', ['slug' => $event->slug, 'intent' => 'reserve']) }}"
-                            class="flex items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 w-full">
-                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            Reserve (Pay Later)
                         </a>
                     </div>
                     @endif

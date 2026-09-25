@@ -66,7 +66,7 @@ class StripePaymentController extends Controller
                 return response()->json(['error' => "Maximum {$tt->max_per_user} '{$tt->name}' tickets per customer."], 422);
             }
 
-            $totalAmount += $tt->price * $qty;
+            $totalAmount += $tt->payablePrice() * $qty;
         }
 
         $reservation = $this->validateReservation(
@@ -100,7 +100,7 @@ class StripePaymentController extends Controller
             return response()->json(['error' => 'Stripe secret key is not configured. Please set STRIPE_SECRET in your .env file.'], 500);
         }
 
-        $currency = TicketType::query()->find($request->tickets[0]['ticket_type_id'])->currency;
+        $currency = collect($ticketTypes)->first(fn ($type) => $type->payablePrice() > 0)?->checkoutCurrency() ?? 'USD';
         Stripe::setApiKey(config('services.stripe.secret'));
 
         try {
@@ -214,7 +214,7 @@ class StripePaymentController extends Controller
 
                 $ticketTypes = $this->validateTicketSelectionForUser($event, $user, $tickets, true);
 
-                $firstType = $ticketTypes[(int) $tickets[0]['ticket_type_id']];
+                $firstType = collect($ticketTypes)->first(fn ($type) => $type->payablePrice() > 0);
                 $totalAmount = 0;
 
                 foreach ($tickets as $entry) {
@@ -226,7 +226,7 @@ class StripePaymentController extends Controller
                         throw new \Exception("Only {$remaining} '{$tt->name}' tickets remaining. Your order required {$qty}.");
                     }
 
-                    $totalAmount += $tt->price * $qty;
+                    $totalAmount += $tt->payablePrice() * $qty;
                 }
 
                 $finalAmount = max(0, $totalAmount - $discountAmount);
@@ -236,7 +236,7 @@ class StripePaymentController extends Controller
                     'event_id' => $event->id,
                     'total_amount' => $finalAmount,
                     'discount_amount' => $discountAmount,
-                    'currency' => $firstType->currency,
+                    'currency' => $firstType?->checkoutCurrency() ?? 'USD',
                     'status' => 'completed',
                     'stripe_payment_intent_id' => $intent->id,
                     'coupon_id' => $coupon?->id,
@@ -247,13 +247,13 @@ class StripePaymentController extends Controller
                 foreach ($tickets as $entry) {
                     $tt = $ticketTypes[(int) $entry['ticket_type_id']];
                     $qty = (int) $entry['quantity'];
-                    $lineTotal = $tt->price * $qty;
+                    $lineTotal = $tt->payablePrice() * $qty;
 
                     OrderItem::create([
                         'order_id' => $order->id,
                         'ticket_type_id' => $tt->id,
                         'quantity' => $qty,
-                        'unit_price' => $tt->price,
+                        'unit_price' => $tt->payablePrice(),
                         'total_price' => $lineTotal,
                     ]);
 
@@ -439,8 +439,8 @@ class StripePaymentController extends Controller
 
                 foreach ($tickets as $entry) {
                     $tt = $ticketTypes[(int) $entry['ticket_type_id']];
-                    $firstType ??= $tt;
-                    $totalAmount += $tt->price * (int) $entry['quantity'];
+                    if ($tt->payablePrice() > 0) { $firstType ??= $tt; }
+                    $totalAmount += $tt->payablePrice() * (int) $entry['quantity'];
                 }
 
                 $finalAmount = max(0, $totalAmount - $discountAmount);
@@ -450,7 +450,7 @@ class StripePaymentController extends Controller
                     'event_id' => $event->id,
                     'total_amount' => $finalAmount,
                     'discount_amount' => $discountAmount,
-                    'currency' => $firstType?->currency ?? 'USD',
+                    'currency' => $firstType?->checkoutCurrency() ?? 'USD',
                     'status' => 'completed',
                     'stripe_payment_intent_id' => $intent->id,
                     'coupon_id' => $coupon?->id,
@@ -467,8 +467,8 @@ class StripePaymentController extends Controller
                         'order_id' => $order->id,
                         'ticket_type_id' => $tt->id,
                         'quantity' => $qty,
-                        'unit_price' => $tt->price,
-                        'total_price' => $tt->price * $qty,
+                        'unit_price' => $tt->payablePrice(),
+                        'total_price' => $tt->payablePrice() * $qty,
                     ]);
 
                     for ($i = 0; $i < $qty; $i++) {
@@ -580,10 +580,14 @@ class StripePaymentController extends Controller
 
             $ticketType = $query->first();
 
-            if (!$ticketType) {
+            if (!$ticketType || !$ticketType->is_active) {
                 throw ValidationException::withMessages([
-                    'tickets' => 'One or more selected ticket types do not belong to this event.',
+                    'tickets' => 'One or more selected ticket types are unavailable for this event.',
                 ]);
+            }
+
+            if ($ticketTypes && $ticketType->payablePrice() > 0 && collect($ticketTypes)->contains(fn ($type) => $type->payablePrice() > 0 && $type->checkoutCurrency() !== $ticketType->checkoutCurrency())) {
+                throw ValidationException::withMessages(['tickets' => 'Tickets with different payment currencies cannot be combined.']);
             }
 
             $existingTickets = Ticket::query()

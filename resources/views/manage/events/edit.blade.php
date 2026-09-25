@@ -5,10 +5,13 @@
 @section('content')
 @php
 $existingPricing = $event->ticketTypes->map(fn($tt) => [
+'id' => $tt->id,
 'name' => $tt->name,
 'description' => $tt->description ?? '',
 'price' => (string) $tt->price,
+'price_eur' => (string) ($tt->price_eur ?? ''),
 'discount_price' => (string) ($tt->discount_price ?? ''),
+'discount_price_eur' => (string) ($tt->discount_price_eur ?? ''),
 'quantity' => (string) $tt->quantity,
 'highlights' => is_array($tt->highlights) ? implode(', ', $tt->highlights) : ($tt->highlights ?? ''),
 ])->toJson();
@@ -23,7 +26,7 @@ $existingSpeakers = $event->speakers->filter(fn($s) => !$s->pivot->featured)->va
     currentStep: 1,
     totalSteps: 4,
     pricing: {{ json_encode(old('pricing', $existingPricing ? json_decode($existingPricing, true) : [])) }},
-    addPricing() { this.pricing.push({ name: '', description: '', price: '', discount_price: '', quantity: '100', highlights: '' }); },
+    addPricing() { this.pricing.push({ name: '', description: '', price: '', price_eur: '', discount_price: '', discount_price_eur: '', quantity: '100', highlights: '' }); },
     removePricing(i) { this.pricing.splice(i, 1); },
     topics: {{ old('keynotes') !== null ? json_encode(old('topics', [])) : $existingTopics }},
     addTopic() { this.topics.push({ name: '', description: '' }); },
@@ -425,11 +428,14 @@ $existingSpeakers = $event->speakers->filter(fn($s) => !$s->pivot->featured)->va
                             <button type="button" @@click="removePricing(i)" class="text-xs text-red-500 hover:text-red-700 font-semibold cursor-pointer">Remove</button>
                         </div>
                         <div class="space-y-4">
+                            <input type="hidden" :name="'pricing[' + i + '][id]'" :value="p.id || ''">
                             <input type="text" x-model="p.name" :name="'pricing[' + i + '][name]'" placeholder="Package name" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-gold-500 focus:outline-none">
                             <textarea x-model="p.description" :name="'pricing[' + i + '][description]'" rows="2" placeholder="Package description" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-gold-500 focus:outline-none resize-none"></textarea>
-                            <div class="grid gap-3 sm:grid-cols-4">
-                                <div><input type="number" step="0.01" min="0" x-model="p.price" :name="'pricing[' + i + '][price]'" placeholder="Price" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
-                                <div><input type="number" step="0.01" min="0" x-model="p.discount_price" :name="'pricing[' + i + '][discount_price]'" placeholder="Discounted" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div><label class="text-xs font-semibold text-slate-600">EUR fee (charged)</label><input type="number" step="0.01" min="0" x-model="p.price_eur" :name="'pricing[' + i + '][price_eur]'" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
+                                <div><label class="text-xs font-semibold text-slate-600">USD reference</label><input type="number" step="0.01" min="0" x-model="p.price" :name="'pricing[' + i + '][price]'" required class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
+                                <div><label class="text-xs font-semibold text-slate-600">Discounted EUR fee</label><input type="number" step="0.01" min="0" x-model="p.discount_price_eur" :name="'pricing[' + i + '][discount_price_eur]'" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
+                                <div><label class="text-xs font-semibold text-slate-600">Discounted USD reference</label><input type="number" step="0.01" min="0" x-model="p.discount_price" :name="'pricing[' + i + '][discount_price]'" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
                                 <div><input type="number" min="1" x-model="p.quantity" :name="'pricing[' + i + '][quantity]'" placeholder="Qty" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
                                 <div><input type="text" x-model="p.highlights" :name="'pricing[' + i + '][highlights]'" placeholder="Highlights" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold-500 focus:outline-none"></div>
                             </div>
