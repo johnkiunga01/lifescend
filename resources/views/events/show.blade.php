@@ -309,13 +309,13 @@
             $totalRemaining = max(0, $totalCapacity - $totalSold);
             $fillPercent = $totalCapacity > 0 ? min(100, round(($totalSold / $totalCapacity) * 100)) : 0;
         @endphp
-        <div class="lg:sticky lg:top-24 space-y-4">
+        <div class="lg:sticky lg:top-24 space-y-4" x-data="{ displayCurrency: 'EUR' }">
             <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div class="bg-slate-900 px-5 py-4">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-semibold text-white">Get Tickets</h3>
                         @if($cheapest && $cheapest->payablePrice() > 0)
-                        <span class="text-xs text-slate-400">Price <span class="text-gold-400 text-base font-extrabold">{{ number_format($cheapest->payablePrice(), 2) }} {{ $cheapest->checkoutCurrency() }}</span></span>
+                        <span class="text-xs text-slate-400">Price <span class="text-gold-400 text-base font-extrabold" @if($cheapest->usdReferencePrice() !== null) x-text="displayCurrency === 'EUR' ? '{{ number_format($cheapest->payablePrice(), 2) }} EUR' : '{{ number_format($cheapest->usdReferencePrice(), 2) }} USD'" @endif>{{ number_format($cheapest->payablePrice(), 2) }} {{ $cheapest->checkoutCurrency() }}</span></span>
                         @endif
                     </div>
                 </div>
@@ -338,9 +338,17 @@
                             </div>
                             <div class="text-right shrink-0 ml-3">
                                 @if($ticketType->payablePrice() > 0)
-                                    <p class="text-lg font-extrabold text-slate-900">{{ number_format($ticketType->payablePrice(), 2) }} <span class="text-xs font-semibold text-slate-500">{{ $ticketType->checkoutCurrency() }}</span></p>
                                     @if($ticketType->usdReferencePrice() !== null)
-                                    <p class="text-xs text-slate-500">{{ number_format($ticketType->usdReferencePrice(), 2) }} USD reference</p>
+                                    <div class="flex items-center justify-end gap-2">
+                                        <p class="text-lg font-extrabold text-slate-900" x-text="displayCurrency === 'EUR' ? '{{ number_format($ticketType->payablePrice(), 2) }} EUR' : '{{ number_format($ticketType->usdReferencePrice(), 2) }} USD'">{{ number_format($ticketType->payablePrice(), 2) }} EUR</p>
+                                        <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5" role="group" aria-label="Displayed currency">
+                                            <button type="button" title="Show EUR price" aria-label="Show EUR price" :aria-pressed="displayCurrency === 'EUR'" @click="displayCurrency = 'EUR'" :class="displayCurrency === 'EUR' ? 'bg-gold-500 text-white' : 'text-slate-500 hover:bg-slate-100'" class="h-7 w-7 rounded-md text-sm font-bold transition-colors">€</button>
+                                            <button type="button" title="Show USD price" aria-label="Show USD price" :aria-pressed="displayCurrency === 'USD'" @click="displayCurrency = 'USD'" :class="displayCurrency === 'USD' ? 'bg-gold-500 text-white' : 'text-slate-500 hover:bg-slate-100'" class="h-7 w-7 rounded-md text-sm font-bold transition-colors">$</button>
+                                        </div>
+                                    </div>
+                                    <p x-show="displayCurrency === 'USD'" class="text-xs text-slate-500">Checkout charges EUR</p>
+                                    @else
+                                    <p class="text-lg font-extrabold text-slate-900">{{ number_format($ticketType->payablePrice(), 2) }} <span class="text-xs font-semibold text-slate-500">{{ $ticketType->checkoutCurrency() }}</span></p>
                                     @endif
                                 @else
                                     <p class="text-sm font-extrabold text-emerald-600">Free</p>

@@ -90,9 +90,17 @@
 
                                 <div class="text-right shrink-0">
                                     @if($ticketType->payablePrice() > 0)
-                                    <p class="text-2xl font-extrabold text-slate-900">{{ number_format($ticketType->payablePrice(), 2) }} <span class="text-sm font-semibold text-slate-400">{{ $ticketType->checkoutCurrency() }}</span></p>
                                     @if($ticketType->usdReferencePrice() !== null)
-                                    <p class="text-xs text-slate-500">{{ number_format($ticketType->usdReferencePrice(), 2) }} USD reference</p>
+                                    <div class="flex items-center justify-end gap-2">
+                                        <p class="text-2xl font-extrabold text-slate-900" x-text="displayCurrency === 'EUR' ? '{{ number_format($ticketType->payablePrice(), 2) }} EUR' : '{{ number_format($ticketType->usdReferencePrice(), 2) }} USD'">{{ number_format($ticketType->payablePrice(), 2) }} EUR</p>
+                                        <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5" role="group" aria-label="Displayed currency">
+                                            <button type="button" title="Show EUR price" aria-label="Show EUR price" :aria-pressed="displayCurrency === 'EUR'" @click="displayCurrency = 'EUR'" :class="displayCurrency === 'EUR' ? 'bg-gold-500 text-white' : 'text-slate-500 hover:bg-slate-100'" class="h-8 w-8 rounded-md text-sm font-bold transition-colors">€</button>
+                                            <button type="button" title="Show USD price" aria-label="Show USD price" :aria-pressed="displayCurrency === 'USD'" @click="displayCurrency = 'USD'" :class="displayCurrency === 'USD' ? 'bg-gold-500 text-white' : 'text-slate-500 hover:bg-slate-100'" class="h-8 w-8 rounded-md text-sm font-bold transition-colors">$</button>
+                                        </div>
+                                    </div>
+                                    <p x-show="displayCurrency === 'USD'" class="text-xs text-slate-500">Payment is charged in EUR</p>
+                                    @else
+                                    <p class="text-2xl font-extrabold text-slate-900">{{ number_format($ticketType->payablePrice(), 2) }} <span class="text-sm font-semibold text-slate-400">{{ $ticketType->checkoutCurrency() }}</span></p>
                                     @endif
                                     @else
                                     <p class="text-2xl font-extrabold text-emerald-600">Free</p>
@@ -863,6 +871,7 @@ function checkout() {
         submitting: false,
         reserving: false,
         paymentMode: 'pay',
+        displayCurrency: 'EUR',
         paymentError: '',
         stripe: null,
         clientSecret: null,
